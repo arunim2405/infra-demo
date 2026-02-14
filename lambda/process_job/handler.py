@@ -64,7 +64,7 @@ def handler(event, context):
                                 {"name": "SEARCH_QUERY", "value": query},
                                 {"name": "S3_BUCKET", "value": S3_BUCKET},
                                 {"name": "DYNAMODB_TABLE", "value": TABLE_NAME},
-                                {"name": "PROXY_URL", "value": PROXY_URL},
+                                # {"name": "PROXY_URL", "value": PROXY_URL},
                                 {"name": "TENANT_ID", "value": tenant_id},
                             ],
                         }

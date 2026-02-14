@@ -142,15 +142,15 @@ resource "aws_api_gateway_usage_plan_key" "main" {
 # ---------------------------------------------------------------------------
 # Method Settings (logging)
 # ---------------------------------------------------------------------------
-resource "aws_api_gateway_method_settings" "all" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  stage_name  = aws_api_gateway_stage.v1.stage_name
-  method_path = "*/*"
+# resource "aws_api_gateway_method_settings" "all" {
+#   rest_api_id = aws_api_gateway_rest_api.main.id
+#   stage_name  = aws_api_gateway_stage.v1.stage_name
+#   method_path = "*/*"
 
-  settings {
-    throttling_rate_limit  = var.api_rate_limit
-    throttling_burst_limit = var.api_burst_limit
-    metrics_enabled        = true
-    logging_level          = "INFO"
-  }
-}
+#   settings {
+#     throttling_rate_limit  = var.api_rate_limit
+#     throttling_burst_limit = var.api_burst_limit
+#     metrics_enabled        = true
+#     logging_level          = "INFO"
+#   }
+# }

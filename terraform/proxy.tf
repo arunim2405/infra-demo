@@ -57,8 +57,8 @@ resource "aws_ecs_task_definition" "proxy" {
         forwarded_for delete
 
         # Logging
-        access_log stdio:/dev/stdout
-        cache_log stdio:/dev/stderr
+        access_log stdio:/dev/null
+        cache_log stdio:/dev/null
 
         # DNS
         dns_nameservers 8.8.8.8 8.8.4.4
@@ -81,13 +81,13 @@ resource "aws_ecs_task_definition" "proxy" {
         }
       }
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "squidclient -h localhost mgr:info || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 30
-      }
+      # healthCheck = {
+      #   command     = ["sh", "-c", "squidclient -h localhost mgr:info || exit 1"]
+      #   interval    = 30
+      #   timeout     = 5
+      #   retries     = 3
+      #   startPeriod = 30
+      # }
     }
   ])
 
