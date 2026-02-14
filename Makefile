@@ -68,7 +68,7 @@ tf-destroy:
 
 docker-build:
 	@echo "→ Building agent Docker image..."
-	docker build -t $(PROJECT_NAME)-agent:latest $(AGENT_DIR)
+	docker build -t $(PROJECT_NAME)-agent:latest $(AGENT_DIR) --platform linux/amd64
 
 docker-login:
 	@echo "→ Logging in to ECR..."

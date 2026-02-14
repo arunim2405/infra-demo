@@ -41,14 +41,7 @@ resource "aws_cloudwatch_log_group" "lambda_status" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "proxy" {
-  name              = "/ecs/${local.name_prefix}-proxy"
-  retention_in_days = 7
 
-  tags = {
-    Name = "${local.name_prefix}-proxy-logs"
-  }
-}
 
 # ---------------------------------------------------------------------------
 # Alarms — SQS DLQ messages (jobs failing repeatedly)

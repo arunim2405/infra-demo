@@ -186,9 +186,13 @@ resource "aws_iam_role_policy" "lambda_process" {
       {
         Effect = "Allow"
         Action = [
-          "ecs:RunTask"
+          "ecs:RunTask",
+          "ecs:TagResource"
         ]
-        Resource = aws_ecs_task_definition.agent.arn
+        Resource = [
+          aws_ecs_task_definition.agent.arn,
+          "arn:aws:ecs:${var.aws_region}:${local.account_id}:task/${aws_ecs_cluster.main.name}/*"
+        ]
       },
       {
         Effect = "Allow"

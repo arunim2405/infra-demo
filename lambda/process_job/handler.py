@@ -105,7 +105,7 @@ def _update_status(task_id: str, status: str, error: str = None, ecs_task_arn: s
     expr_names = {"#s": "status"}
 
     if error:
-        update_expr += ", error = :e"
+        update_expr += ", errorLog = :e"
         expr_values[":e"] = error
     if ecs_task_arn:
         update_expr += ", ecs_task_arn = :arn"

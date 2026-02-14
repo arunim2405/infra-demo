@@ -55,7 +55,7 @@ resource "aws_ecs_task_definition" "agent" {
       ]
 
       # These will be overridden per-task by Lambda
-      # TASK_ID, SEARCH_QUERY, PROXY_URL are injected via containerOverrides
+      # TASK_ID, SEARCH_QUERY are injected via containerOverrides
 
       logConfiguration = {
         logDriver = "awslogs"

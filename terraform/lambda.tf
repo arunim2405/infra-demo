@@ -79,7 +79,6 @@ resource "aws_lambda_function" "process_job" {
       SECURITY_GROUP  = aws_security_group.agent.id
       S3_BUCKET       = aws_s3_bucket.outputs.id
       CONTAINER_NAME  = "agent"
-      PROXY_URL       = "http://${aws_lb.proxy.dns_name}:3128"
     }
   }
 

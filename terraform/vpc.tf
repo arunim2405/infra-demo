@@ -24,7 +24,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 # ---------------------------------------------------------------------------
-# Public Subnets (for NAT Gateway & Proxy)
+# Public Subnets (for NAT Gateway)
 # ---------------------------------------------------------------------------
 resource "aws_subnet" "public" {
   count = 2
@@ -176,47 +176,12 @@ resource "aws_security_group" "agent" {
   description = "Security group for agent ECS tasks"
   vpc_id      = aws_vpc.main.id
 
-  # Allow egress to proxy
+  # Allow all outbound (internet via NAT)
   egress {
-    description = "Allow outbound to proxy"
-    from_port   = 3128
-    to_port     = 3128
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
-
-  # Allow egress to internet (for S3, DynamoDB, etc. via NAT)
-  egress {
-    description = "Allow HTTPS outbound"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow DNS
-  egress {
-    description = "Allow DNS UDP"
-    from_port   = 53
-    to_port     = 53
-    protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    description = "Allow DNS TCP"
-    from_port   = 53
-    to_port     = 53
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow HTTP for proxy connections
-  egress {
-    description = "Allow HTTP outbound"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -229,36 +194,6 @@ resource "aws_security_group" "agent" {
   }
 }
 
-# Proxy — accepts traffic from agents, routes to internet
-resource "aws_security_group" "proxy" {
-  name_prefix = "${local.name_prefix}-proxy-"
-  description = "Security group for Squid proxy"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "Allow inbound from agents"
-    from_port       = 3128
-    to_port         = 3128
-    protocol        = "tcp"
-    security_groups = [aws_security_group.agent.id]
-  }
-
-  egress {
-    description = "Allow all outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-proxy-sg"
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
 
 # Lambda — needs VPC access for ECS API
 resource "aws_security_group" "lambda" {
