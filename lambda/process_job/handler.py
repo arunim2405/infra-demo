@@ -86,8 +86,10 @@ def handler(event, context):
                 continue
 
             ecs_task_arn = response["tasks"][0]["taskArn"]
-            logger.info("ECS task started: %s", ecs_task_arn)
-            _update_status(task_id, "PROVISIONED", ecs_task_arn=ecs_task_arn)
+            # Extract short task ID from ARN (last segment after /)
+            ecs_task_id = ecs_task_arn.split("/")[-1]
+            logger.info("ECS task started: %s (id: %s)", ecs_task_arn, ecs_task_id)
+            _update_status(task_id, "PROVISIONED", ecs_task_arn=ecs_task_arn, ecs_task_id=ecs_task_id)
 
         except Exception as exc:
             logger.error("Failed to run ECS task for %s: %s", task_id, exc)
@@ -95,7 +97,7 @@ def handler(event, context):
             raise  # Let SQS retry
 
 
-def _update_status(task_id: str, status: str, error: str = None, ecs_task_arn: str = None):
+def _update_status(task_id: str, status: str, error: str = None, ecs_task_arn: str = None, ecs_task_id: str = None):
     """Update task status in DynamoDB."""
     update_expr = "SET #s = :s, updated_at = :u"
     expr_values = {
@@ -110,6 +112,9 @@ def _update_status(task_id: str, status: str, error: str = None, ecs_task_arn: s
     if ecs_task_arn:
         update_expr += ", ecs_task_arn = :arn"
         expr_values[":arn"] = ecs_task_arn
+    if ecs_task_id:
+        update_expr += ", ecs_task_id = :tid"
+        expr_values[":tid"] = ecs_task_id
 
     table.update_item(
         Key={"task_id": task_id},

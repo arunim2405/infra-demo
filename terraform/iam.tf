@@ -278,3 +278,54 @@ resource "aws_iam_role_policy" "lambda_status" {
     ]
   })
 }
+
+# ---------------------------------------------------------------------------
+# Lambda: Get Logs Role
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "lambda_logs" {
+  name = "${local.name_prefix}-lambda-logs"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_logs_basic" {
+  role       = aws_iam_role.lambda_logs.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_logs" {
+  name = "logs-permissions"
+  role = aws_iam_role.lambda_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem"
+        ]
+        Resource = aws_dynamodb_table.tasks.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:GetLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "${aws_cloudwatch_log_group.ecs_agent.arn}:*"
+      }
+    ]
+  })
+}

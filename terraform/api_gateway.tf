@@ -74,6 +74,37 @@ resource "aws_api_gateway_integration" "get_job" {
 }
 
 # ---------------------------------------------------------------------------
+# /jobs/{task_id}/logs resource
+# ---------------------------------------------------------------------------
+resource "aws_api_gateway_resource" "job_logs" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.job_by_id.id
+  path_part   = "logs"
+}
+
+# GET /jobs/{task_id}/logs → get_logs Lambda
+resource "aws_api_gateway_method" "get_logs" {
+  rest_api_id      = aws_api_gateway_rest_api.main.id
+  resource_id      = aws_api_gateway_resource.job_logs.id
+  http_method      = "GET"
+  authorization    = "NONE"
+  api_key_required = true
+
+  request_parameters = {
+    "method.request.path.task_id" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "get_logs" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.job_logs.id
+  http_method             = aws_api_gateway_method.get_logs.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.get_logs.invoke_arn
+}
+
+# ---------------------------------------------------------------------------
 # Deployment & Stage
 # ---------------------------------------------------------------------------
 resource "aws_api_gateway_deployment" "main" {
@@ -83,10 +114,13 @@ resource "aws_api_gateway_deployment" "main" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.jobs.id,
       aws_api_gateway_resource.job_by_id.id,
+      aws_api_gateway_resource.job_logs.id,
       aws_api_gateway_method.post_jobs.id,
       aws_api_gateway_method.get_job.id,
+      aws_api_gateway_method.get_logs.id,
       aws_api_gateway_integration.post_jobs.id,
       aws_api_gateway_integration.get_job.id,
+      aws_api_gateway_integration.get_logs.id,
     ]))
   }
 

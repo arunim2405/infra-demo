@@ -41,6 +41,14 @@ resource "aws_cloudwatch_log_group" "lambda_status" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/${local.name_prefix}-get-logs"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-get-logs"
+  }
+}
 
 
 # ---------------------------------------------------------------------------

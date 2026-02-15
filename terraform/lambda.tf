@@ -23,6 +23,12 @@ data "archive_file" "get_status" {
   output_path = "${path.module}/.build/get_status.zip"
 }
 
+data "archive_file" "get_logs" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda/get_logs"
+  output_path = "${path.module}/.build/get_logs.zip"
+}
+
 # ---------------------------------------------------------------------------
 # Submit Job Lambda
 # ---------------------------------------------------------------------------
@@ -127,6 +133,42 @@ resource "aws_lambda_permission" "get_status_apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_status.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
+}
+
+# ---------------------------------------------------------------------------
+# Get Logs Lambda
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "get_logs" {
+  function_name    = "${local.name_prefix}-get-logs"
+  role             = aws_iam_role.lambda_logs.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 128
+  filename         = data.archive_file.get_logs.output_path
+  source_code_hash = data.archive_file.get_logs.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE    = aws_dynamodb_table.tasks.name
+      LOG_GROUP         = aws_cloudwatch_log_group.ecs_agent.name
+      LOG_STREAM_PREFIX = "agent"
+      CONTAINER_NAME    = "agent"
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-get-logs"
+  }
+}
+
+# Permission for API Gateway to invoke
+resource "aws_lambda_permission" "get_logs_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_logs.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
 }
