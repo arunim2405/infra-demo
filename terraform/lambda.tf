@@ -29,6 +29,82 @@ data "archive_file" "get_logs" {
   output_path = "${path.module}/.build/get_logs.zip"
 }
 
+data "archive_file" "list_jobs" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda/list_jobs"
+  output_path = "${path.module}/.build/list_jobs.zip"
+}
+
+data "archive_file" "register_tenant" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda/register_tenant"
+  output_path = "${path.module}/.build/register_tenant.zip"
+}
+
+data "archive_file" "manage_users" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda/manage_users"
+  output_path = "${path.module}/.build/manage_users.zip"
+}
+
+# ---------------------------------------------------------------------------
+# Authorizer Lambda — packaged with pip dependencies
+# ---------------------------------------------------------------------------
+resource "null_resource" "authorizer_deps" {
+  triggers = {
+    requirements = filemd5("${path.module}/../lambda/authorizer/requirements.txt")
+    handler      = filemd5("${path.module}/../lambda/authorizer/handler.py")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      rm -rf ${path.module}/.build/authorizer_pkg
+      mkdir -p ${path.module}/.build/authorizer_pkg
+      pip3 install -r ${path.module}/../lambda/authorizer/requirements.txt \
+        -t ${path.module}/.build/authorizer_pkg \
+        --platform manylinux2014_x86_64 \
+        --only-binary=:all: \
+        --python-version 3.12 \
+        --implementation cp \
+        --quiet
+      cp ${path.module}/../lambda/authorizer/handler.py ${path.module}/.build/authorizer_pkg/
+    EOT
+  }
+}
+
+data "archive_file" "authorizer" {
+  type        = "zip"
+  source_dir  = "${path.module}/.build/authorizer_pkg"
+  output_path = "${path.module}/.build/authorizer.zip"
+  depends_on  = [null_resource.authorizer_deps]
+}
+
+# ---------------------------------------------------------------------------
+# Authorizer Lambda
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "authorizer" {
+  function_name    = "${local.name_prefix}-authorizer"
+  role             = aws_iam_role.lambda_authorizer.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 10
+  memory_size      = 128
+  filename         = data.archive_file.authorizer.output_path
+  source_code_hash = data.archive_file.authorizer.output_base64sha256
+
+  environment {
+    variables = {
+      USERS_TABLE   = aws_dynamodb_table.users.name
+      USER_POOL_ID  = aws_cognito_user_pool.main.id
+      APP_CLIENT_ID = aws_cognito_user_pool_client.frontend.id
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-authorizer"
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Submit Job Lambda
 # ---------------------------------------------------------------------------
@@ -54,7 +130,6 @@ resource "aws_lambda_function" "submit_job" {
   }
 }
 
-# Permission for API Gateway to invoke
 resource "aws_lambda_permission" "submit_job_apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
@@ -93,7 +168,6 @@ resource "aws_lambda_function" "process_job" {
   }
 }
 
-# SQS event source mapping
 resource "aws_lambda_event_source_mapping" "process_job_sqs" {
   event_source_arn                   = aws_sqs_queue.job_queue.arn
   function_name                      = aws_lambda_function.process_job.arn
@@ -128,7 +202,6 @@ resource "aws_lambda_function" "get_status" {
   }
 }
 
-# Permission for API Gateway to invoke
 resource "aws_lambda_permission" "get_status_apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
@@ -164,11 +237,107 @@ resource "aws_lambda_function" "get_logs" {
   }
 }
 
-# Permission for API Gateway to invoke
 resource "aws_lambda_permission" "get_logs_apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_logs.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
+}
+
+# ---------------------------------------------------------------------------
+# List Jobs Lambda
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "list_jobs" {
+  function_name    = "${local.name_prefix}-list-jobs"
+  role             = aws_iam_role.lambda_list_jobs.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 128
+  filename         = data.archive_file.list_jobs.output_path
+  source_code_hash = data.archive_file.list_jobs.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.tasks.name
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-list-jobs"
+  }
+}
+
+resource "aws_lambda_permission" "list_jobs_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.list_jobs.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
+}
+
+# ---------------------------------------------------------------------------
+# Register Tenant Lambda
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "register_tenant" {
+  function_name    = "${local.name_prefix}-register-tenant"
+  role             = aws_iam_role.lambda_register_tenant.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 128
+  filename         = data.archive_file.register_tenant.output_path
+  source_code_hash = data.archive_file.register_tenant.output_base64sha256
+
+  environment {
+    variables = {
+      USERS_TABLE = aws_dynamodb_table.users.name
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-register-tenant"
+  }
+}
+
+resource "aws_lambda_permission" "register_tenant_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.register_tenant.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
+}
+
+# ---------------------------------------------------------------------------
+# Manage Users Lambda
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "manage_users" {
+  function_name    = "${local.name_prefix}-manage-users"
+  role             = aws_iam_role.lambda_manage_users.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 128
+  filename         = data.archive_file.manage_users.output_path
+  source_code_hash = data.archive_file.manage_users.output_base64sha256
+
+  environment {
+    variables = {
+      USERS_TABLE  = aws_dynamodb_table.users.name
+      USER_POOL_ID = aws_cognito_user_pool.main.id
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-manage-users"
+  }
+}
+
+resource "aws_lambda_permission" "manage_users_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.manage_users.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
 }

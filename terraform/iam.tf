@@ -106,6 +106,47 @@ resource "aws_iam_role_policy" "ecs_task" {
 }
 
 # ---------------------------------------------------------------------------
+# Lambda: Authorizer Role
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "lambda_authorizer" {
+  name = "${local.name_prefix}-lambda-authorizer"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_authorizer_basic" {
+  role       = aws_iam_role.lambda_authorizer.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_authorizer" {
+  name = "authorizer-permissions"
+  role = aws_iam_role.lambda_authorizer.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem"]
+        Resource = aws_dynamodb_table.users.arn
+      }
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
 # Lambda: Submit Job Role
 # ---------------------------------------------------------------------------
 resource "aws_iam_role" "lambda_submit" {
@@ -325,6 +366,153 @@ resource "aws_iam_role_policy" "lambda_logs" {
           "logs:DescribeLogStreams"
         ]
         Resource = "${aws_cloudwatch_log_group.ecs_agent.arn}:*"
+      }
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Lambda: List Jobs Role
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "lambda_list_jobs" {
+  name = "${local.name_prefix}-lambda-list-jobs"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_list_jobs_basic" {
+  role       = aws_iam_role.lambda_list_jobs.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_list_jobs" {
+  name = "list-jobs-permissions"
+  role = aws_iam_role.lambda_list_jobs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query"
+        ]
+        Resource = [
+          aws_dynamodb_table.tasks.arn,
+          "${aws_dynamodb_table.tasks.arn}/index/*"
+        ]
+      }
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Lambda: Register Tenant Role
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "lambda_register_tenant" {
+  name = "${local.name_prefix}-lambda-register-tenant"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_register_tenant_basic" {
+  role       = aws_iam_role.lambda_register_tenant.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_register_tenant" {
+  name = "register-tenant-permissions"
+  role = aws_iam_role.lambda_register_tenant.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem"
+        ]
+        Resource = aws_dynamodb_table.users.arn
+      }
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Lambda: Manage Users Role
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "lambda_manage_users" {
+  name = "${local.name_prefix}-lambda-manage-users"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_manage_users_basic" {
+  role       = aws_iam_role.lambda_manage_users.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_manage_users" {
+  name = "manage-users-permissions"
+  role = aws_iam_role.lambda_manage_users.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query"
+        ]
+        Resource = [
+          aws_dynamodb_table.users.arn,
+          "${aws_dynamodb_table.users.arn}/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cognito-idp:ListUsers",
+          "cognito-idp:AdminGetUser"
+        ]
+        Resource = aws_cognito_user_pool.main.arn
       }
     ]
   })

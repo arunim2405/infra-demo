@@ -1,11 +1,13 @@
 """
 Lambda: Get Job Status
 Returns task metadata from DynamoDB and pre-signed S3 URLs for outputs.
+Enforces tenant ownership via authorizer context.
 """
 
 import json
 import os
 import logging
+import decimal
 
 import boto3
 from botocore.exceptions import ClientError
@@ -30,12 +32,20 @@ def handler(event, context):
     if not task_id:
         return _response(400, {"error": "task_id is required"})
 
+    # Verify tenant ownership
+    auth_context = event.get("requestContext", {}).get("authorizer", {})
+    caller_tenant_id = auth_context.get("tenant_id", "")
+
     # Fetch from DynamoDB
     result = table.get_item(Key={"task_id": task_id})
     item = result.get("Item")
 
     if not item:
         return _response(404, {"error": f"Task {task_id} not found"})
+
+    # Enforce tenant isolation
+    if item.get("tenant_id") != caller_tenant_id:
+        return _response(403, {"error": "You do not have access to this task"})
 
     # Convert Decimal types for JSON serialization
     task_data = _sanitize_item(item)
@@ -75,8 +85,6 @@ def _get_output_urls(task_id: str) -> dict:
 
 def _sanitize_item(item: dict) -> dict:
     """Convert DynamoDB Decimal types to int/float for JSON."""
-    import decimal
-
     sanitized = {}
     for key, value in item.items():
         if isinstance(value, decimal.Decimal):
@@ -92,6 +100,8 @@ def _response(status_code: int, body: dict) -> dict:
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization",
+            "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
         },
         "body": json.dumps(body),
     }

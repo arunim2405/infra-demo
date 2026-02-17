@@ -2,3 +2,5 @@
 */.build
 terraform.tfstate
 terraform.tfstate.backup
+*/node_modules
+frontend/dist

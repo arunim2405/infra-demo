@@ -50,6 +50,42 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "lambda_authorizer" {
+  name              = "/aws/lambda/${local.name_prefix}-authorizer"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-authorizer-logs"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "lambda_list_jobs" {
+  name              = "/aws/lambda/${local.name_prefix}-list-jobs"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-list-jobs-logs"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "lambda_register_tenant" {
+  name              = "/aws/lambda/${local.name_prefix}-register-tenant"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-register-tenant-logs"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "lambda_manage_users" {
+  name              = "/aws/lambda/${local.name_prefix}-manage-users"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${local.name_prefix}-lambda-manage-users-logs"
+  }
+}
+
 
 # ---------------------------------------------------------------------------
 # Alarms — SQS DLQ messages (jobs failing repeatedly)

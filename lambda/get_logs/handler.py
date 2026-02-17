@@ -1,6 +1,7 @@
 """
 Lambda: Get Runtime Logs
 Fetches CloudWatch runtime logs for an ECS task using the ecs_task_id stored in DynamoDB.
+Enforces tenant ownership via authorizer context.
 Log stream pattern: {prefix}/{container-name}/{ecs-task-id}
 """
 
@@ -33,12 +34,20 @@ def handler(event, context):
     if not task_id:
         return _response(400, {"error": "task_id is required"})
 
+    # Verify tenant ownership
+    auth_context = event.get("requestContext", {}).get("authorizer", {})
+    caller_tenant_id = auth_context.get("tenant_id", "")
+
     # Fetch task metadata from DynamoDB
     result = table.get_item(Key={"task_id": task_id})
     item = result.get("Item")
 
     if not item:
         return _response(404, {"error": f"Task {task_id} not found"})
+
+    # Enforce tenant isolation
+    if item.get("tenant_id") != caller_tenant_id:
+        return _response(403, {"error": "You do not have access to this task"})
 
     ecs_task_id = item.get("ecs_task_id")
     if not ecs_task_id:
@@ -127,6 +136,8 @@ def _response(status_code: int, body: dict) -> dict:
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization",
+            "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
         },
         "body": json.dumps(body),
     }

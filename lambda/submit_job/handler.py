@@ -1,6 +1,7 @@
 """
 Lambda: Submit Job
 Accepts a job request via API Gateway, writes metadata to DynamoDB, and queues the job in SQS.
+Tenant ID is read from the authorizer context (not request body).
 """
 
 import json
@@ -22,13 +23,19 @@ table = dynamodb.Table(TABLE_NAME)
 
 def handler(event, context):
     """POST /jobs — submit a new computer-use job."""
+    # Get tenant_id from the RBAC authorizer
+    auth_context = event.get("requestContext", {}).get("authorizer", {})
+    tenant_id = auth_context.get("tenant_id", "")
+
+    if not tenant_id:
+        return _response(403, {"error": "No tenant associated with this user"})
+
     try:
         body = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError:
         return _response(400, {"error": "Invalid JSON body"})
 
     query = body.get("query")
-    tenant_id = body.get("tenant_id", "default")
 
     if not query:
         return _response(400, {"error": "'query' is required"})
@@ -41,6 +48,7 @@ def handler(event, context):
     item = {
         "task_id": task_id,
         "tenant_id": tenant_id,
+        "submitted_by": auth_context.get("cognito_id", ""),
         "query": query,
         "status": "PENDING",
         "created_at": now,
@@ -64,6 +72,8 @@ def _response(status_code: int, body: dict) -> dict:
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization",
+            "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
         },
         "body": json.dumps(body),
     }
