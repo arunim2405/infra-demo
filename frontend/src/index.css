@@ -26,9 +26,15 @@
   --transition: 150ms ease;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   font-family: var(--font);
   background: var(--bg-primary);
@@ -478,9 +484,30 @@ html, body, #root {
   letter-spacing: 0.04em;
 }
 
-.role-admin { background: rgba(99,102,241,0.15); color: #818cf8; }
-.role-doctor { background: rgba(16,185,129,0.15); color: #34d399; }
-.role-read_only { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.role-admin {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
+.role-doctor {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.role-read_only {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.status-pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.status-active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
 
 /* ============================================================================
    Tabs
@@ -687,7 +714,9 @@ html, body, #root {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ============================================================================

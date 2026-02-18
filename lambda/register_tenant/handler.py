@@ -1,7 +1,7 @@
 """
 Lambda: Register Tenant
-Called after first Cognito sign-up. Creates a tenant and registers user as ADMIN.
-If the user already has a tenant, returns existing info.
+Called after Cognito sign-in. If the user has a pending invitation,
+claims it. Otherwise creates a new tenant and registers user as ADMIN.
 """
 
 import json
@@ -24,7 +24,7 @@ users_table = dynamodb.Table(USERS_TABLE)
 
 
 def handler(event, context):
-    """POST /tenants/register — register current user + create tenant."""
+    """POST /tenants/register — register current user + create or join tenant."""
     auth_context = event.get("requestContext", {}).get("authorizer", {})
     cognito_id = auth_context.get("cognito_id", "")
     email = auth_context.get("email", "")
@@ -32,7 +32,7 @@ def handler(event, context):
     if not cognito_id:
         return _response(401, {"error": "Unauthorized"})
 
-    # Check if user already exists
+    # 1. Check if user already has an active record (by cognito_id)
     result = users_table.get_item(Key={"cognito_id": cognito_id})
     existing_user = result.get("Item")
 
@@ -44,7 +44,49 @@ def handler(event, context):
             "email": existing_user.get("email"),
         })
 
-    # Parse optional tenant_name from body
+    # 2. Check if there's a pending invitation for this email
+    if email:
+        invite_result = users_table.query(
+            IndexName="email-index",
+            KeyConditionExpression="email = :email",
+            ExpressionAttributeValues={":email": email},
+        )
+
+        for invite in invite_result.get("Items", []):
+            if invite.get("status") == "PENDING":
+                # Found a pending invitation — claim it!
+                old_id = invite["cognito_id"]
+                tenant_id = invite["tenant_id"]
+                role = invite.get("role", "READ_ONLY")
+                now = datetime.now(timezone.utc).isoformat()
+
+                # Delete the placeholder record
+                users_table.delete_item(Key={"cognito_id": old_id})
+
+                # Create the real record with this user's cognito_id
+                users_table.put_item(Item={
+                    "cognito_id": cognito_id,
+                    "email": email,
+                    "tenant_id": tenant_id,
+                    "role": role,
+                    "status": "ACTIVE",
+                    "created_at": now,
+                    "invited_at": invite.get("created_at", ""),
+                })
+
+                logger.info(
+                    "User %s claimed invitation to tenant %s as %s",
+                    cognito_id, tenant_id, role,
+                )
+
+                return _response(200, {
+                    "message": "Joined tenant via invitation",
+                    "tenant_id": tenant_id,
+                    "role": role,
+                    "email": email,
+                })
+
+    # 3. No invitation found — create a brand-new tenant
     try:
         body = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError:
@@ -54,18 +96,16 @@ def handler(event, context):
     tenant_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    # Create the user as ADMIN of the new tenant
-    user_item = {
-        "cognito_id": cognito_id,
-        "email": email,
-        "tenant_id": tenant_id,
-        "tenant_name": tenant_name,
-        "role": "ADMIN",
-        "created_at": now,
-    }
-
     users_table.put_item(
-        Item=user_item,
+        Item={
+            "cognito_id": cognito_id,
+            "email": email,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant_name,
+            "role": "ADMIN",
+            "status": "ACTIVE",
+            "created_at": now,
+        },
         ConditionExpression="attribute_not_exists(cognito_id)",
     )
 

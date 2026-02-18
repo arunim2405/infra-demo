@@ -116,6 +116,7 @@ export default function Team() {
                             <tr>
                                 <th>Email</th>
                                 <th>Role</th>
+                                <th>Status</th>
                                 <th>Added</th>
                                 <th></th>
                             </tr>
@@ -127,6 +128,11 @@ export default function Team() {
                                     <td>
                                         <span className={`role-badge role-${u.role?.toLowerCase()}`}>
                                             {u.role}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span className={`status-badge ${u.status === 'PENDING' ? 'status-pending' : 'status-active'}`}>
+                                            {u.status || 'ACTIVE'}
                                         </span>
                                     </td>
                                     <td className="text-muted">
@@ -147,3 +153,4 @@ export default function Team() {
         </div>
     );
 }
+

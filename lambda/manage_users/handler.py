@@ -2,13 +2,14 @@
 Lambda: Manage Users
 ADMIN-only endpoints to add, remove, and list users in a tenant.
 Routes based on HTTP method:
-  POST   /tenants/users            → add user
+  POST   /tenants/users            → invite user (creates pending invitation)
   DELETE /tenants/users/{cognito_id} → remove user
   GET    /tenants/users            → list users
 """
 
 import json
 import os
+import uuid
 import logging
 from datetime import datetime, timezone
 
@@ -19,10 +20,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
-cognito = boto3.client("cognito-idp")
 
 USERS_TABLE = os.environ["USERS_TABLE"]
-USER_POOL_ID = os.environ["USER_POOL_ID"]
 
 users_table = dynamodb.Table(USERS_TABLE)
 
@@ -53,7 +52,13 @@ def handler(event, context):
 
 
 def _add_user(event, tenant_id):
-    """Add a user to the tenant."""
+    """Invite a user to the tenant by email.
+    
+    Creates a pending invitation record. The user does NOT need to have
+    signed up in Cognito yet. When they sign up and call /tenants/register,
+    the register_tenant Lambda will find this invitation and assign them
+    to this tenant instead of creating a new one.
+    """
     try:
         body = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError:
@@ -68,51 +73,41 @@ def _add_user(event, tenant_id):
     if role not in VALID_ROLES:
         return _response(400, {"error": f"Invalid role. Must be one of: {', '.join(VALID_ROLES)}"})
 
-    # Look up user in Cognito by email
-    try:
-        response = cognito.list_users(
-            UserPoolId=USER_POOL_ID,
-            Filter=f'email = "{email}"',
-            Limit=1,
-        )
-        users = response.get("Users", [])
-    except ClientError as exc:
-        logger.error("Cognito lookup failed: %s", exc)
-        return _response(500, {"error": "Failed to look up user in Cognito"})
+    # Check if this email already has a record (pending or active)
+    existing_records = users_table.query(
+        IndexName="email-index",
+        KeyConditionExpression="email = :email",
+        ExpressionAttributeValues={":email": email},
+    ).get("Items", [])
 
-    if not users:
-        return _response(404, {"error": f"No Cognito user found with email '{email}'. They must sign up first."})
-
-    cognito_user = users[0]
-    target_cognito_id = cognito_user["Username"]
-
-    # Check if user already belongs to a tenant
-    existing = users_table.get_item(Key={"cognito_id": target_cognito_id}).get("Item")
-    if existing:
-        if existing.get("tenant_id") == tenant_id:
-            return _response(409, {"error": "User is already a member of this tenant"})
+    for record in existing_records:
+        if record.get("tenant_id") == tenant_id:
+            return _response(409, {"error": "User is already a member of (or invited to) this tenant"})
         else:
             return _response(409, {"error": "User already belongs to another tenant"})
 
-    # Add user to tenant
+    # Create a pending invitation with a placeholder cognito_id
+    placeholder_id = f"invite_{uuid.uuid4()}"
     now = datetime.now(timezone.utc).isoformat()
+
     users_table.put_item(Item={
-        "cognito_id": target_cognito_id,
+        "cognito_id": placeholder_id,
         "email": email,
         "tenant_id": tenant_id,
         "role": role,
+        "status": "PENDING",
         "created_at": now,
-        "added_by": event.get("requestContext", {}).get("authorizer", {}).get("cognito_id", ""),
+        "invited_by": event.get("requestContext", {}).get("authorizer", {}).get("cognito_id", ""),
     })
 
-    logger.info("Added user %s to tenant %s as %s", email, tenant_id, role)
+    logger.info("Created invitation for %s to tenant %s as %s", email, tenant_id, role)
 
     return _response(201, {
-        "message": f"User {email} added as {role}",
-        "cognito_id": target_cognito_id,
+        "message": f"Invitation sent to {email} as {role}",
         "email": email,
         "role": role,
         "tenant_id": tenant_id,
+        "status": "PENDING",
     })
 
 
@@ -150,7 +145,7 @@ def _remove_user(event, tenant_id):
 
 
 def _list_users(tenant_id):
-    """List all users in the tenant."""
+    """List all users in the tenant (including pending invitations)."""
     result = users_table.query(
         IndexName="tenant-index",
         KeyConditionExpression="tenant_id = :tid",
@@ -163,6 +158,7 @@ def _list_users(tenant_id):
             "cognito_id": item.get("cognito_id"),
             "email": item.get("email"),
             "role": item.get("role"),
+            "status": item.get("status", "ACTIVE"),
             "created_at": item.get("created_at"),
         })
 

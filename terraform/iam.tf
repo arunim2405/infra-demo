@@ -453,9 +453,14 @@ resource "aws_iam_role_policy" "lambda_register_tenant" {
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",
-          "dynamodb:GetItem"
+          "dynamodb:GetItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query"
         ]
-        Resource = aws_dynamodb_table.users.arn
+        Resource = [
+          aws_dynamodb_table.users.arn,
+          "${aws_dynamodb_table.users.arn}/index/*"
+        ]
       }
     ]
   })
@@ -505,14 +510,6 @@ resource "aws_iam_role_policy" "lambda_manage_users" {
           aws_dynamodb_table.users.arn,
           "${aws_dynamodb_table.users.arn}/index/*"
         ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cognito-idp:ListUsers",
-          "cognito-idp:AdminGetUser"
-        ]
-        Resource = aws_cognito_user_pool.main.arn
       }
     ]
   })

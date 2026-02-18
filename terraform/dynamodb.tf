@@ -64,10 +64,22 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "email"
+    type = "S"
+  }
+
   # GSI for listing all users in a tenant
   global_secondary_index {
     name            = "tenant-index"
     hash_key        = "tenant_id"
+    projection_type = "ALL"
+  }
+
+  # GSI for looking up pending invitations by email
+  global_secondary_index {
+    name            = "email-index"
+    hash_key        = "email"
     projection_type = "ALL"
   }
 
